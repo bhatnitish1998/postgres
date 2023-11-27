@@ -1073,6 +1073,40 @@ typedef struct BTScanOpaqueData
 
 typedef BTScanOpaqueData *BTScanOpaque;
 
+///////////////////////////////////// ADDED CODE - START  ////////////////////////////////////////
+
+// structures
+typedef struct lsm_meta_data
+{
+    // sizes of different level treees
+    int l0_size;
+    int l1_size;
+    int l2_size;
+
+    // max size of trees
+    int l0_max_size;
+    int l1_max_size;
+
+    // Oid of trees
+    Oid l0_id;
+    Oid l1_id;
+    Oid l2_id;
+
+    // Oid of relation on which the index is built
+    Oid rel_id;
+
+} lsm_meta_data;
+
+// global variables
+static bool lsm_tree_flag = true;
+
+// function definitions
+bool check_lsm(const char * relation_name);
+lsm_meta_data* get_meta_from_metapage_buffer(Buffer buffer_t);
+void initialize_meta(lsm_meta_data* x);
+
+
+///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 /*
  * We use some private sk_flags bits in preprocessed scan keys.  We're allowed
  * to use bits 16-31 (see skey.h).  The uppermost bits are copied from the

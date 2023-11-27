@@ -86,6 +86,58 @@ static BTVacuumPosting btreevacuumposting(BTVacState *vstate,
 										  OffsetNumber updatedoffset,
 										  int *nremaining);
 
+///////////////////////////////////// ADDED CODE - START  ////////////////////////////////////////
+
+// check whether to build lsm tree
+bool check_lsm(const char * relation_name)
+{
+    // avoid tables that start with pg_
+    char check[3]={relation_name[0],relation_name[1],relation_name[2]};
+    bool name_check = strcmp(check,"pg_") != 0;
+
+    // check if lsm_tree_flag is set
+    return lsm_tree_flag && name_check;
+}
+
+// get pointer to lsm_meta_data with write access from METAPAGE Buffer
+lsm_meta_data* get_meta_from_metapage_buffer(Buffer buffer_t)
+{
+
+    // Get location just after existing metadata
+    Page page_t = BufferGetPage(buffer_t);
+    BTMetaPageData* meta_t =BTPageGetMeta(page_t);
+    meta_t = meta_t+1;
+
+    // Cast it to lsm_meta_data
+    lsm_meta_data *lsm_md = (lsm_meta_data *)(meta_t);
+
+    // change page header lower pointer and mark buffer as dirty
+    PageHeader pageHeader = (PageHeader)page_t;
+    pageHeader->pd_lower = pageHeader->pd_lower +sizeof(struct lsm_meta_data);
+    MarkBufferDirty(buffer_t);
+
+    return lsm_md;
+}
+
+// initialize lsm_meta_data
+void initialize_meta(lsm_meta_data* x)
+{
+    x->l0_size=0;
+    x->l1_size=0;
+    x->l2_size=0;
+
+    x->l0_max_size =5;
+    x->l1_max_size =10;
+
+    x->l0_id=InvalidOid;
+    x->l1_id=InvalidOid;
+    x->l2_id=InvalidOid;
+
+    x->rel_id=InvalidOid;
+}
+
+///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
+
 
 /*
  * Btree handler function: return IndexAmRoutine with access method parameters
