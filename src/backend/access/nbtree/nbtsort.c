@@ -356,11 +356,11 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
     {
         printf("-------------------------BUILD BEGIN-----------------------\n");
 
-
         // Get the buffer where BTREE_METAPAGE is present with write access
         Buffer buffer_t = _bt_getbuf(index,BTREE_METAPAGE,BT_WRITE);
+        Page page_t = BufferGetPage(buffer_t);
         // get pointer to lsm meta data
-        lsm_meta_data *lsm_md = get_meta_from_metapage_buffer(buffer_t);
+        lsm_meta_data *lsm_md = get_meta_from_metapage(page_t);
 
         printf("LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
         initialize_meta(lsm_md);
@@ -373,11 +373,12 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
         printf("L0 Oid: %d\n",lsm_md->l0_id);
         printf("Indexed rows: %d\n",lsm_md->l0_size);
 
-        // release the buffer
+        // set buffer to dirty and release the buffer
+        MarkBufferDirty(buffer_t);
         _bt_relbuf(index,buffer_t);
         printf("-------------------------BUILD END-----------------------\n");
     }
-
+///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 	return result;
 }
 

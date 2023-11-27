@@ -1102,7 +1102,7 @@ static bool lsm_tree_flag = true;
 
 // function definitions
 bool check_lsm(const char * relation_name);
-lsm_meta_data* get_meta_from_metapage_buffer(Buffer buffer_t);
+lsm_meta_data* get_meta_from_metapage(Page page_t);
 void initialize_meta(lsm_meta_data* x);
 
 

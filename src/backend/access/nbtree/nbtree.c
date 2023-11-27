@@ -100,21 +100,19 @@ bool check_lsm(const char * relation_name)
 }
 
 // get pointer to lsm_meta_data with write access from METAPAGE Buffer
-lsm_meta_data* get_meta_from_metapage_buffer(Buffer buffer_t)
+lsm_meta_data* get_meta_from_metapage(Page page_t)
 {
 
     // Get location just after existing metadata
-    Page page_t = BufferGetPage(buffer_t);
     BTMetaPageData* meta_t =BTPageGetMeta(page_t);
     meta_t = meta_t+1;
 
     // Cast it to lsm_meta_data
     lsm_meta_data *lsm_md = (lsm_meta_data *)(meta_t);
 
-    // change page header lower pointer and mark buffer as dirty
+    // change page header lower pointer
     PageHeader pageHeader = (PageHeader)page_t;
     pageHeader->pd_lower = pageHeader->pd_lower +sizeof(struct lsm_meta_data);
-    MarkBufferDirty(buffer_t);
 
     return lsm_md;
 }
@@ -206,6 +204,25 @@ btbuildempty(Relation index)
 	/* Construct metapage. */
 	metapage = (Page) palloc(BLCKSZ);
 	_bt_initmetapage(metapage, P_NONE, 0, _bt_allequalimage(index, false));
+    ///////////////////////////////////// ADDED CODE - START  ////////////////////////////////////////
+
+    if(lsm_tree_flag)
+    {
+        printf("----------------------BUILD EMPTY BEGIN--------------------\n");
+
+        // initialize metadata
+        lsm_meta_data *lsm_md = get_meta_from_metapage(metapage);
+        printf("LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
+        initialize_meta(lsm_md);
+
+        // set lsm meta data
+        lsm_md->l0_id = index->rd_id;
+        lsm_md->rel_id = index->rd_index->indrelid;
+
+        printf("L0 Oid: %d\n",lsm_md->l0_id);
+        printf("----------------------BUILD EMPTY END--------------------\n");
+    }
+///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 
 	/*
 	 * Write the page and log it.  It might seem that an immediate sync would
