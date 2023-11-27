@@ -1102,9 +1102,13 @@ static bool lsm_tree_flag = true;
 
 // function definitions
 bool check_lsm(const char * relation_name);
+void print_meta_data(lsm_meta_data* lsm_md);
+lsm_meta_data* set_meta_in_metapage(Page page_t);
 lsm_meta_data* get_meta_from_metapage(Page page_t);
 void initialize_meta(lsm_meta_data* x);
-
+Oid create_new_tree(Relation heapRel,Relation rel,int level,const lsm_meta_data* lsm_md);
+void merge_tree(Relation heapRel, Relation smaller, Oid larger);
+Buffer clear_index(Relation heapRel, Relation rel, Buffer buffer_t, lsm_meta_data** lsm_md_p);
 
 ///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 /*

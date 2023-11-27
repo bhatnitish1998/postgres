@@ -290,7 +290,6 @@ static void _bt_parallel_scan_and_sort(BTSpool *btspool, BTSpool *btspool2,
 									   Sharedsort *sharedsort2, int sortmem,
 									   bool progress);
 
-
 /*
  *	btbuild() -- build a new btree index.
  */
@@ -360,18 +359,21 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
         Buffer buffer_t = _bt_getbuf(index,BTREE_METAPAGE,BT_WRITE);
         Page page_t = BufferGetPage(buffer_t);
         // get pointer to lsm meta data
-        lsm_meta_data *lsm_md = get_meta_from_metapage(page_t);
+        lsm_meta_data *lsm_md = set_meta_in_metapage(page_t);
 
         printf("LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
         initialize_meta(lsm_md);
 
         // set lsm meta data
-        lsm_md->l0_id = index->rd_id;
-        lsm_md->rel_id = index->rd_index->indrelid;
-        lsm_md->l0_size = (int)result->index_tuples;
+        if(lsm_md->l0_id == InvalidOid)
+        {
+            lsm_md->l0_id = index->rd_id;
+            lsm_md->rel_id = index->rd_index->indrelid;
+            lsm_md->l0_size = (int)result->index_tuples;
+        }
 
-        printf("L0 Oid: %d\n",lsm_md->l0_id);
-        printf("Indexed rows: %d\n",lsm_md->l0_size);
+        printf("Tree Oid: %d\n",index->rd_id);
+        printf("Indexed rows: %d\n",(int)result->index_tuples);
 
         // set buffer to dirty and release the buffer
         MarkBufferDirty(buffer_t);
