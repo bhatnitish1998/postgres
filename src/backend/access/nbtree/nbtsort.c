@@ -370,6 +370,7 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
             lsm_md->l0_id = index->rd_id;
             lsm_md->rel_id = index->rd_index->indrelid;
             lsm_md->l0_size = (int)result->index_tuples;
+
         }
 
         printf("Tree Oid: %d\n",index->rd_id);

@@ -202,7 +202,7 @@ void merge_tree(Relation heapRel, Relation smaller, Oid larger)
 }
 
 
-Buffer clear_index(Relation heapRel, Relation rel, Buffer buffer_t,lsm_meta_data** lsm_md_p)
+Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffer_t,lsm_meta_data** lsm_md_p)
 {
     // copy metadata
     lsm_meta_data *lsm_copy = palloc(sizeof(struct lsm_meta_data));
@@ -212,11 +212,12 @@ Buffer clear_index(Relation heapRel, Relation rel, Buffer buffer_t,lsm_meta_data
     _bt_relbuf(rel,buffer_t);
 
     // truncate the relation
-    RelationTruncate(rel,0);
-    IndexInfo* index_info = BuildDummyIndexInfo(rel);
-    index_build(heapRel,rel,index_info,true,false);
+    RelationTruncate(to_clear,0);
+    IndexInfo* index_info = BuildDummyIndexInfo(to_clear);
+    index_build(heapRel,to_clear,index_info,true,false);
 
     // reacquire the buffer and copy back metadata
+
     buffer_t= _bt_getbuf(rel,BTREE_METAPAGE,BT_WRITE);
     Page page_t =BufferGetPage(buffer_t);
     *lsm_md_p = get_meta_from_metapage(page_t);
@@ -378,64 +379,64 @@ btinsert(Relation rel, Datum *values, bool *isnull,
         print_meta_data(lsm_md);
 
         // check overflow
-        if(lsm_md->l0_size >= lsm_md->l0_max_size)
-        {
+        if(lsm_md->l0_size >= lsm_md->l0_max_size) {
             printf("LSM 0 overflow detected\n");
 
             // check if l1 tree does not exist
-            if(lsm_md->l1_id== InvalidOid)
-            {
+            if (lsm_md->l1_id == InvalidOid) {
                 printf("Creating new LSM 1 tree\n");
                 // create l1 tree
-                lsm_md->l1_id = create_new_tree(heapRel,rel,1,lsm_md);
+                lsm_md->l1_id = create_new_tree(heapRel, rel, 1, lsm_md);
             }
 
             // merge l0 to l1 tree
-            printf("Merging L0 oid : %d ,  l1 oid : %d\n",lsm_md->l0_id,lsm_md->l1_id);
-            merge_tree(heapRel,rel,lsm_md->l1_id);
-            lsm_md->l1_size+= lsm_md->l0_size;
-            printf("finished adding L0: %d entries to L1: %d\n",lsm_md->l0_id,lsm_md->l1_id);
+            printf("Merging L0 oid : %d ,  l1 oid : %d\n", lsm_md->l0_id, lsm_md->l1_id);
+            merge_tree(heapRel, rel, lsm_md->l1_id);
+            lsm_md->l1_size += lsm_md->l0_size;
+            printf("finished adding L0: %d entries to L1: %d\n", lsm_md->l0_id, lsm_md->l1_id);
             print_meta_data(lsm_md);
 
             // clear L0 index
             printf("Clearing l0 index\n");
-            buffer_t = clear_index(heapRel, rel, buffer_t,&lsm_md);
-            lsm_md->l0_size =0;
+            buffer_t = clear_index(heapRel, rel,rel, buffer_t, &lsm_md);
+            lsm_md->l0_size = 0;
             printf("Clear successful\n");
             print_meta_data(lsm_md);
-
-            // check if overflow from L1
-            if(lsm_md->l1_size>= lsm_md->l1_max_size)
-            {
-                // check if l2 tree does not exist
-                if(lsm_md->l2_id== InvalidOid)
-                {
-                    printf("Creating new LSM 2 tree\n");
-                    // create l2 tree
-                    lsm_md->l2_id = create_new_tree(heapRel,rel,2,lsm_md);
-                }
-
-                // merge l1 to l2 tree
-                printf("Merging L1 oid : %d ,  l2 oid : %d\n",lsm_md->l1_id,lsm_md->l1_id);
-                Relation sml = index_open(lsm_md->l1_id,AccessExclusiveLock);
-                merge_tree(heapRel,sml,lsm_md->l1_id);
-                index_close(sml,AccessExclusiveLock);
-
-                //Update size
-                lsm_md->l2_size+= lsm_md->l1_size;
-                printf("finished adding L1:%d entries to L2:%d\n",lsm_md->l1_id,lsm_md->l2_id);
-                print_meta_data(lsm_md);
-
-                // clear L1 index
-                printf("Clearing l1 index\n");
-                Relation l1_rel = index_open(lsm_md->l1_id,AccessExclusiveLock);
-                buffer_t = clear_index(heapRel, l1_rel, buffer_t,&lsm_md);
-                lsm_md->l1_size =0;
-                printf("Clear successful\n");
-                print_meta_data(lsm_md);
-            }
         }
 
+            // check if overflow from L1
+        if(lsm_md->l1_size>= lsm_md->l1_max_size)
+        {  printf("LSM 1 overflow detected\n");
+            // check if l2 tree does not exist
+            if(lsm_md->l2_id== InvalidOid)
+            {
+                printf("Creating new LSM 2 tree\n");
+                // create l2 tree
+                lsm_md->l2_id = create_new_tree(heapRel,rel,2,lsm_md);
+            }
+
+            // merge l1 to l2 tree
+            printf("Merging L1 oid : %d ,  l2 oid : %d\n",lsm_md->l1_id,lsm_md->l2_id);
+            Relation sml = index_open(lsm_md->l1_id,AccessExclusiveLock);
+            merge_tree(heapRel,sml,lsm_md->l2_id);
+            index_close(sml,AccessExclusiveLock);
+
+            //Update size
+            lsm_md->l2_size+= lsm_md->l1_size;
+            printf("finished adding L1:%d entries to L2:%d\n",lsm_md->l1_id,lsm_md->l2_id);
+            print_meta_data(lsm_md);
+
+            // clear L1 index
+            printf("Clearing l1 index\n");
+            Relation l1_rel = index_open(lsm_md->l1_id,AccessExclusiveLock);
+            buffer_t = clear_index(heapRel,rel, l1_rel, buffer_t,&lsm_md);
+            lsm_md->l1_size =0;
+            index_close(l1_rel,AccessExclusiveLock);
+            printf("Clear successful\n");
+            print_meta_data(lsm_md);
+        }
+
+        MarkBufferDirty(buffer_t);
         _bt_relbuf(rel,buffer_t);
         printf("----------------------INSERT END--------------------\n");
     }
