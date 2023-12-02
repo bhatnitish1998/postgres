@@ -165,7 +165,9 @@ void initialize_meta(lsm_meta_data* x)
 void print_meta_data(lsm_meta_data* lsm_md)
 {
     printf("Oid: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_id,lsm_md->l1_id,lsm_md->l2_id);
+    elog(NOTICE,"Oid: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_id,lsm_md->l1_id,lsm_md->l2_id);
     printf("Size: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_size,lsm_md->l1_size,lsm_md->l2_size);
+    elog(NOTICE,"Size: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_size,lsm_md->l1_size,lsm_md->l2_size);
 }
 
 /*
@@ -238,6 +240,8 @@ void merge_tree(Relation heapRel, Relation smaller, Oid larger)
 
 Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffer_t,lsm_meta_data** lsm_md_p)
 {
+    printf("-CLEAR BEGIN -\n");
+    elog(NOTICE,"-CLEAR BEGIN -\n");
     // copy metadata
     lsm_meta_data *lsm_copy = palloc(sizeof(struct lsm_meta_data));
     memcpy(lsm_copy,*lsm_md_p,sizeof (struct lsm_meta_data));
@@ -245,10 +249,13 @@ Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffe
     //release the buffer
     _bt_relbuf(rel,buffer_t);
 
+    printf("Truncating index:%d to 0 blocks\n",to_clear->rd_id);
+    elog(NOTICE,"Truncating index:%d to 0 blocks\n",to_clear->rd_id);
     // truncate the relation
     RelationTruncate(to_clear,0);
     IndexInfo* index_info = BuildDummyIndexInfo(to_clear);
     index_build(heapRel,to_clear,index_info,true,false);
+
 
     // reacquire the buffer and copy back metadata
     buffer_t= _bt_getbuf(rel,BTREE_METAPAGE,BT_WRITE);
@@ -257,6 +264,10 @@ Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffe
     memcpy(*lsm_md_p,lsm_copy,sizeof(struct lsm_meta_data));
 
     pfree(lsm_copy);
+
+    printf("-CLEAR END -\n");
+    elog(NOTICE,"-CLEAR END -\n");
+
     return buffer_t;
 }
 
@@ -400,12 +411,12 @@ btinsert(Relation rel, Datum *values, bool *isnull,
     if(check_lsm(heapRel->rd_rel->relname.data))
     {
         printf("----------------------INSERT BEGIN--------------------\n");
+        elog(NOTICE,"----------------------INSERT BEGIN--------------------\n");
 
         // Read lsm meta data
         Buffer buffer_t = _bt_getbuf(rel,BTREE_METAPAGE,BT_WRITE);
         Page page_t = BufferGetPage(buffer_t);
         struct lsm_meta_data *lsm_md = get_meta_from_metapage(page_t);
-        printf("LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
 
         // increment level 0 tree size by 1
         lsm_md->l0_size= lsm_md->l0_size+ 1;
@@ -414,42 +425,49 @@ btinsert(Relation rel, Datum *values, bool *isnull,
         // check overflow
         if(lsm_md->l0_size >= lsm_md->l0_max_size) {
             printf("LSM 0 overflow detected\n");
+            elog(NOTICE,"LSM 0 overflow detected\n");
 
             // check if l1 tree does not exist
             if (lsm_md->l1_id == InvalidOid) {
                 printf("Creating new LSM 1 tree\n");
+                elog(NOTICE,"Creating new LSM 1 tree\n");
                 // create l1 tree
                 lsm_md->l1_id = create_new_tree(heapRel, rel, 1);
             }
 
             // merge l0 to l1 tree
-            printf("Merging L0 oid : %d ,  l1 oid : %d\n", lsm_md->l0_id, lsm_md->l1_id);
+            printf("Merging L0:%d to  l1:%d\n", lsm_md->l0_id, lsm_md->l1_id);
+            elog(NOTICE,"Merging L0:%d  to  l1:%d\n", lsm_md->l0_id, lsm_md->l1_id);
             merge_tree(heapRel, rel, lsm_md->l1_id);
             lsm_md->l1_size += lsm_md->l0_size;
-            printf("finished adding L0: %d entries to L1: %d\n", lsm_md->l0_id, lsm_md->l1_id);
-            print_meta_data(lsm_md);
 
             // clear L0 index
+
             printf("Clearing l0 index\n");
+            elog(NOTICE,"Clearing l0 index\n");
             buffer_t = clear_index(heapRel, rel,rel, buffer_t, &lsm_md);
             lsm_md->l0_size = 0;
             printf("Clear successful\n");
+            elog(NOTICE,"Clear successful\n");
             print_meta_data(lsm_md);
         }
 
             // check if overflow from L1
         if(lsm_md->l1_size>= lsm_md->l1_max_size)
         {  printf("LSM 1 overflow detected\n");
+            elog(NOTICE,"LSM 1 overflow detected\n");
             // check if l2 tree does not exist
             if(lsm_md->l2_id== InvalidOid)
             {
                 printf("Creating new LSM 2 tree\n");
+                elog(NOTICE,"Creating new LSM 2 tree\n");
                 // create l2 tree
                 lsm_md->l2_id = create_new_tree(heapRel,rel,2);
             }
 
             // merge l1 to l2 tree
             printf("Merging L1 oid : %d ,  l2 oid : %d\n",lsm_md->l1_id,lsm_md->l2_id);
+            elog(NOTICE,"Merging L1 oid : %d ,  l2 oid : %d\n",lsm_md->l1_id,lsm_md->l2_id);
             Relation sml = index_open(lsm_md->l1_id,AccessExclusiveLock);
             merge_tree(heapRel,sml,lsm_md->l2_id);
             index_close(sml,AccessExclusiveLock);
@@ -457,21 +475,24 @@ btinsert(Relation rel, Datum *values, bool *isnull,
             //Update size
             lsm_md->l2_size+= lsm_md->l1_size;
             printf("finished adding L1:%d entries to L2:%d\n",lsm_md->l1_id,lsm_md->l2_id);
-            print_meta_data(lsm_md);
+            elog(NOTICE,"finished adding L1:%d entries to L2:%d\n",lsm_md->l1_id,lsm_md->l2_id);
 
             // clear L1 index
             printf("Clearing l1 index\n");
+            elog(NOTICE,"Clearing l1 index\n");
             Relation l1_rel = index_open(lsm_md->l1_id,AccessExclusiveLock);
             buffer_t = clear_index(heapRel,rel, l1_rel, buffer_t,&lsm_md);
             lsm_md->l1_size =0;
             index_close(l1_rel,AccessExclusiveLock);
             printf("Clear successful\n");
+            elog(NOTICE,"Clear successful\n");
             print_meta_data(lsm_md);
         }
 
         MarkBufferDirty(buffer_t);
         _bt_relbuf(rel,buffer_t);
         printf("----------------------INSERT END--------------------\n");
+        elog(NOTICE,"----------------------INSERT END--------------------\n");
     }
 ///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 

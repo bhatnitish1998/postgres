@@ -353,7 +353,8 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
 
     if(check_lsm(heap->rd_rel->relname.data))
     {
-        printf("-------------------------BUILD BEGIN-----------------------\n");
+        printf("--BUILD BEGIN---\n");
+        elog(NOTICE,"--BUILD BEGIN--\n");
 
         // Get the buffer where BTREE_METAPAGE is present with write access
         Buffer buffer_t = _bt_getbuf(index,BTREE_METAPAGE,BT_WRITE);
@@ -362,6 +363,7 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
         lsm_meta_data *lsm_md = set_meta_in_metapage(page_t);
 
         printf("LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
+        elog(NOTICE,"LSM meta data location: %x to %x\n",lsm_md,lsm_md+sizeof(struct lsm_meta_data));
         initialize_meta(lsm_md);
 
         // set lsm meta data
@@ -370,16 +372,16 @@ btbuild(Relation heap, Relation index, IndexInfo *indexInfo)
             lsm_md->l0_id = index->rd_id;
             lsm_md->rel_id = index->rd_index->indrelid;
             lsm_md->l0_size = (int)result->index_tuples;
-
         }
 
         printf("Tree Oid: %d\n",index->rd_id);
-        printf("Indexed rows: %d\n",(int)result->index_tuples);
+        elog(NOTICE,"Tree Oid: %d\n",index->rd_id);
 
         // set buffer to dirty and release the buffer
         MarkBufferDirty(buffer_t);
         _bt_relbuf(index,buffer_t);
-        printf("-------------------------BUILD END-----------------------\n");
+        printf("--BUILD END--\n");
+        elog(NOTICE,"--BUILD END--\n");
     }
 ///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
 	return result;

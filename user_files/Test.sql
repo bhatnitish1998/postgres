@@ -21,3 +21,12 @@ insert into t values(17,30);
 insert into t values(18,30);
 insert into t values(19,30);
 insert into t values(20,30);
+
+
+
+drop table t;
+create table t (a int , b int);
+insert into t values(1,30);
+insert into t values(2,30);
+create index i1 on t (a);
+insert into t values(3,30);
