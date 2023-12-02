@@ -25,6 +25,13 @@
 #include "storage/bufmgr.h"
 #include "storage/shm_toc.h"
 
+///////////////////////////////////// ADDED CODE - START  ////////////////////////////////////////
+
+#define L0_MAX_SIZE 5
+#define L1_MAX_SIZE 0
+
+///////////////////////////////////// ADDED CODE - END  ////////////////////////////////////////
+
 /* There's room for a 16-bit vacuum cycle ID in BTPageOpaqueData */
 typedef uint16 BTCycleId;
 
@@ -1078,7 +1085,7 @@ typedef BTScanOpaqueData *BTScanOpaque;
 // structures
 typedef struct lsm_meta_data
 {
-    // sizes of different level treees
+    // sizes of different level trees
     int l0_size;
     int l1_size;
     int l2_size;
@@ -1106,7 +1113,7 @@ void print_meta_data(lsm_meta_data* lsm_md);
 lsm_meta_data* set_meta_in_metapage(Page page_t);
 lsm_meta_data* get_meta_from_metapage(Page page_t);
 void initialize_meta(lsm_meta_data* x);
-Oid create_new_tree(Relation heapRel,Relation rel,int level,const lsm_meta_data* lsm_md);
+Oid create_new_tree(Relation heapRel,Relation rel,int level);
 void merge_tree(Relation heapRel, Relation smaller, Oid larger);
 Buffer clear_index(Relation heapRel, Relation rel,Relation to_clear, Buffer buffer_t, lsm_meta_data** lsm_md_p);
 

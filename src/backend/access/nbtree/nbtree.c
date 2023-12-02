@@ -92,7 +92,11 @@ static BTVacuumPosting btreevacuumposting(BTVacState *vstate,
 
 ///////////////////////////////////// ADDED CODE - START  ////////////////////////////////////////
 
-// check whether to build lsm tree
+/*
+ *  Check whether it is suitable to build lsm tree on the given relation
+ *
+ *  True : If LSM flag is set and relation name does not start with 'pg_'
+ */
 bool check_lsm(const char * relation_name)
 {
     // avoid tables that start with pg_
@@ -103,7 +107,10 @@ bool check_lsm(const char * relation_name)
     return lsm_tree_flag && name_check;
 }
 
-// get pointer to lsm_meta_data with write access from METAPAGE Buffer
+/*
+ * Creates a lsm_meta_data structure at the end of passed BTMetaPage header and extends the lower
+ * pointer of the header to include it
+ */
 lsm_meta_data* set_meta_in_metapage(Page page_t)
 {
 
@@ -120,7 +127,9 @@ lsm_meta_data* set_meta_in_metapage(Page page_t)
 
     return lsm_md;
 }
-
+/*
+ * Returns the pointer to lsm_meta_data structure present in the passed BTMetaPage
+ */
 lsm_meta_data* get_meta_from_metapage(Page page_t)
 {
     // Get location just after existing metadata
@@ -131,15 +140,17 @@ lsm_meta_data* get_meta_from_metapage(Page page_t)
     return lsm_md;
 }
 
-// initialize lsm_meta_data
+/*
+ * Initialize lsm metadata
+ */
 void initialize_meta(lsm_meta_data* x)
 {
     x->l0_size=0;
     x->l1_size=0;
     x->l2_size=0;
 
-    x->l0_max_size =5;
-    x->l1_max_size =10;
+    x->l0_max_size =L0_MAX_SIZE;
+    x->l1_max_size =L1_MAX_SIZE;
 
     x->l0_id=InvalidOid;
     x->l1_id=InvalidOid;
@@ -148,13 +159,20 @@ void initialize_meta(lsm_meta_data* x)
     x->rel_id=InvalidOid;
 }
 
+/*
+ * Function to print the sizes and Oids of LSM trees at various levels
+ */
 void print_meta_data(lsm_meta_data* lsm_md)
 {
     printf("Oid: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_id,lsm_md->l1_id,lsm_md->l2_id);
     printf("Size: L0 = %d ; L1 = %d ; L2 = %d ;\n",lsm_md->l0_size,lsm_md->l1_size,lsm_md->l2_size);
 }
 
-Oid create_new_tree(Relation heapRel,Relation rel,int level,const lsm_meta_data* lsm_md)
+/*
+ *  Creates a new index tree for Relation heapRel, at the level specified in the argument.
+ *  Returns the Oid of the newly created tree
+ */
+Oid create_new_tree(Relation heapRel,Relation rel,int level)
 {
     // get new name for index and copy the index
     char *oldname = rel->rd_rel->relname.data;
@@ -177,6 +195,13 @@ Oid create_new_tree(Relation heapRel,Relation rel,int level,const lsm_meta_data*
     return new_tree;
 }
 
+/*
+ *  Merges the index relation smaller into the larger relation
+ *  Parameters:
+ *      heapRel : Relation on which the index is built.
+ *      smaller : Smaller Relation which has to be merged
+ *      larger : Oid of the larger Relation to merge into
+ */
 void merge_tree(Relation heapRel, Relation smaller, Oid larger)
 {
     // open lower level index with Oid.
@@ -201,6 +226,15 @@ void merge_tree(Relation heapRel, Relation smaller, Oid larger)
 
 }
 
+/*
+ *  Clears the given index
+ *  Parameters:
+ *      heapRel : Relation on which the index is built.
+ *      rel : L0 index (since metadata is stored on top of L0)
+ *      to_clear : Relation which is to be cleared
+ *      buffer_t : to release the lock and reacquire after clearing
+ *      lsm_md_p : Pointer to the lsm_md_p meta data.
+ */
 
 Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffer_t,lsm_meta_data** lsm_md_p)
 {
@@ -217,7 +251,6 @@ Buffer clear_index(Relation heapRel,Relation rel,Relation to_clear, Buffer buffe
     index_build(heapRel,to_clear,index_info,true,false);
 
     // reacquire the buffer and copy back metadata
-
     buffer_t= _bt_getbuf(rel,BTREE_METAPAGE,BT_WRITE);
     Page page_t =BufferGetPage(buffer_t);
     *lsm_md_p = get_meta_from_metapage(page_t);
@@ -386,7 +419,7 @@ btinsert(Relation rel, Datum *values, bool *isnull,
             if (lsm_md->l1_id == InvalidOid) {
                 printf("Creating new LSM 1 tree\n");
                 // create l1 tree
-                lsm_md->l1_id = create_new_tree(heapRel, rel, 1, lsm_md);
+                lsm_md->l1_id = create_new_tree(heapRel, rel, 1);
             }
 
             // merge l0 to l1 tree
@@ -412,7 +445,7 @@ btinsert(Relation rel, Datum *values, bool *isnull,
             {
                 printf("Creating new LSM 2 tree\n");
                 // create l2 tree
-                lsm_md->l2_id = create_new_tree(heapRel,rel,2,lsm_md);
+                lsm_md->l2_id = create_new_tree(heapRel,rel,2);
             }
 
             // merge l1 to l2 tree
